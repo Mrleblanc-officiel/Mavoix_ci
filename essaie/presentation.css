@@ -1,0 +1,64 @@
+
+
+    :root {
+	/* Cores */
+	--ciano: #32dfdf;
+	--ciano-claro: #6beded;
+	--azul-cinza-escuro: #1b2430;
+	--azul-cinza: #30475e;
+	--cinza-escuro: #282828;
+	--cinza-claro: #f0ffffde;
+	--branco-placeholder: #f0ffff94;
+}
+ 
+
+
+body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background-color: rgb(65, 149, 198);
+    font-size: small;
+    margin: 0;
+    padding: 0;
+}
+
+header {
+    margin-bottom: 20px;
+    font-size: 18px;
+}
+
+.container {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    padding: 20px;
+}
+
+.card {
+    width: 250px;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    background: white;
+}
+
+.card img {
+    width: 100%;
+    border-radius: 10px;
+}
+
+button {
+    margin-top: 10px;
+    padding: 10px;
+    width: 100%;
+    border: none;
+    background: blue;
+    color: white;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+button:hover {
+    background: darkblue;
+}
