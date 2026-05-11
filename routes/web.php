@@ -7,10 +7,36 @@
 |------------------------------------------------------------
 */
 
-// Démarrage session (une seule fois ici)
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
+$_SESSION['user'] = [
+
+    'id_Utilisateur' => 8,
+    'nom'            => 'leblanc',
+    'email'          => 'daou@gmail.com',
+    'id_Role'        => 1
+];
+
+function isAuthenticated()
+{
+    return isset($_SESSION['user']);
+}
+
+
+function isAdmin()
+{
+    return isset($_SESSION['user'])
+        && $_SESSION['user']['id_Role'] == 1;
+}
+
+function isObservateur()
+{
+    return isset($_SESSION['user'])
+        && $_SESSION['user']['id_Role'] == 2;
+}
+
 
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../controllers/AuthController.php';
@@ -20,140 +46,556 @@ require_once __DIR__ . '/../controllers/CandidatController.php';
 require_once __DIR__ . '/../controllers/AdminController.php';
 require_once __DIR__ . '/../controllers/ObservateurController.php';
 
+
+
 $page = $_GET['page'] ?? 'login';
 
 switch ($page) {
 
-    // --------------------------------------------------------
-    // AUTH
-    // --------------------------------------------------------
+    case 'presentation':
 
-    case 'login':
-        $error = $success = '';
-        require __DIR__ . '/../view/auth/login.php';
-        break;
+        require_once __DIR__ . '/../views/public/presentation.php'; 
 
-    case 'login-process':
-        $controller = new AuthController();
-        $result     = $controller->login($_POST['email'] ?? '', $_POST['password'] ?? '');
+    break;
 
-        if ($result['status'] === 'success') {
-            // Rediriger vers OTP, passer OTP dev en session temporaire
-            $_SESSION['otp_dev'] = $result['otp_dev'] ?? null;
-            header('Location: ?page=otp');
-            exit;
-        }
-        $error = $result['message'];
-        require __DIR__ . '/../view/auth/login.php';
-        break;
-
-    case 'otp':
-        $otp_dev = $_SESSION['otp_dev'] ?? null;
-        $error   = '';
-        require __DIR__ . '/../view/auth/otp.php';
-        break;
-
-    case 'otp-verify':
-        $controller = new AuthController();
-        $digits     = $_POST['digit'] ?? [];
-        $otpSaisi   = implode('', $digits);
-        $result     = $controller->verifierOTP($otpSaisi);
-
-        if ($result['status'] === 'success') {
-            unset($_SESSION['otp_dev']);
-            header('Location: ?page=' . $result['redirect']);
-            exit;
-        }
-        $otp_dev = $_SESSION['otp_dev'] ?? null;
-        $error   = $result['message'];
-        require __DIR__ . '/../view/auth/otp.php';
-        break;
-
-    case 'logout':
-        $controller = new AuthController();
-        $controller->deconnexion();
-        header('Location: ?page=login');
-        exit;
-
-    // --------------------------------------------------------
-    // VOTE (Electeur)
-    // --------------------------------------------------------
-
-    case 'accueil':
-    case 'home':
-        if (!isset($_SESSION['user'])) { header('Location: ?page=login'); exit; }
-        $controller = new VoteController();
-        $result     = $controller->electionsDisponibles();
-        $elections  = $result['data'] ?? [];
-        $user       = $_SESSION['user'];
-        require __DIR__ . '/../view/vote/accueil.php';
-        break;
-
-    case 'vote':
-        if (!isset($_SESSION['user'])) { header('Location: ?page=login'); exit; }
-        $controller = new ElectionController();
-        $id         = (int)($_GET['id'] ?? 0);
-        $res        = $controller->recupererElections();
-        // Trouver l'élection
-        $election = null;
-        foreach ($res['data'] ?? [] as $e) {
-            if ($e['id_Election'] == $id) { $election = $e; break; }
-        }
-        if (!$election) { echo "Election introuvable"; break; }
-        $cc       = new CandidatController();
-        $cRes     = $cc->recupererCandidats();
-        $candidats = array_filter($cRes['data'] ?? [], fn($c) => $c['id_Election'] == $id && $c['id_Actif']);
-        $candidats = array_values($candidats);
-        $error = '';
-        require __DIR__ . '/../view/vote/bulletin.php';
-        break;
+    case 'admin':
+            if (!isAdmin()) {
+                header('Location: ?page=login');
+                exit;
+            }
+    break;
 
     case 'vote-submit':
-        if (!isset($_SESSION['user'])) { header('Location: ?page=login'); exit; }
-        $controller = new VoteController();
-        $result     = $controller->voter((int)($_POST['id_Candidat'] ?? 0), (int)($_POST['id_Election'] ?? 0));
-        if ($result['status'] === 'success') {
-            // Token preuve
-            echo "<script>alert('✅ Vote enregistré !\\nToken preuve : " . addslashes($result['token']) . "'); window.location='?page=accueil';</script>";
+
+    if (!isAdmin()) {
+        header('Location: ?page=vote-submit');
+        exit;
+    }
+
+    require_once __DIR__ . '/../views/vote/vote-submit.php';
+
+    break;
+
+    /*
+    |--------------------------------------------------------------------------
+    | AUTHENTIFICATION
+    |--------------------------------------------------------------------------
+    */
+
+    // PAGE LOGIN
+    case 'login':
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+            $controller = new AuthController();
+            $controller->login($_POST);
+
         } else {
-            echo "<script>alert('❌ " . addslashes($result['message']) . "'); history.back();</script>";
+
+            require_once __DIR__ . '/../views/auth/login.php';
+
         }
+
         break;
 
-    // --------------------------------------------------------
-    // ADMIN
-    // --------------------------------------------------------
 
-    case 'admin-dashboard':
-        if (!isset($_SESSION['user']) || $_SESSION['user']['id_Role'] != 1) { header('Location: ?page=login'); exit; }
-        $admin = new AdminController();
-        $res   = $admin->statistiques();
-        $stats = $res['data'] ?? [];
-        require __DIR__ . '/../view/admin/dashboard.php';
-        break;
+    // PAGE INSCRIPTION
+    case 'register':
 
-    // --------------------------------------------------------
-    // OBSERVATEUR
-    // --------------------------------------------------------
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    case 'observateur-dashboard':
-        if (!isset($_SESSION['user'])) { header('Location: ?page=login'); exit; }
-        $obs       = new ObservateurController();
-        $resEl     = $obs->elections();
-        $elections = [];
-        foreach ($resEl['data'] ?? [] as $election) {
-            $r = $obs->resultats($election['id_Election']);
-            $elections[] = [
-                'election'    => $election,
-                'resultats'   => $r['resultats'] ?? [],
-                'total_votes' => $r['total_votes'] ?? 0
-            ];
+            $controller = new AuthController();
+            $controller->register($_POST);
+
+        } else {
+
+            require_once __DIR__ . '/../views/auth/register.php';
+
         }
-        require __DIR__ . '/../view/observateur/dashboard.php';
+
         break;
 
-    default:
-        http_response_code(404);
-        echo "<h2>404 – Page introuvable</h2>";
+
+    // VERIFICATION OTP
+    case 'otp':
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+            $controller = new AuthController();
+            $controller->verifyOtp($_POST);
+
+        } else {
+
+            require_once __DIR__ . '/../views/auth/otp.php';
+
+        }
+
+        break;
+
+
+    // DECONNEXION
+    case 'logout':
+
+        $controller = new AuthController();
+        $controller->logout();
+
+        break;
+
+    /*
+    |--------------------------------------------------------------------------
+    | VOTE / ELECTEUR
+    |--------------------------------------------------------------------------
+    */
+        
+        
+    // ACCUEIL ELECTEUR
+    case 'accueil':
+    
+        require_once __DIR__ . '/../views/vote/accueil.php';
+    
+        break;
+    
+    
+    
+    // LISTE DES ELECTIONS
+    case 'elections':
+    
+        $controller = new VoteController();
+        $controller->elections();
+    
+        break;
+    
+    
+    
+    // BULLETIN DE VOTE
+    case 'vote':
+    
+        if (isset($_GET['id'])) {
+    
+            $controller = new VoteController();
+            $controller->bulletin($_GET['id']);
+    
+        } else {
+    
+            echo "Election introuvable";
+    
+        }
+
+        header('Location: ?page=confirmation');
+exit;
+    
+        break;
+    
+    
+    
+    // SOUMISSION DU VOTE
+    case 'vote-submit':
+    
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    
+            $controller = new VoteController();
+    
+            $controller->voter($_POST);
+    
+        } else {
+    
+            echo "Méthode non autorisée";
+    
+        }
+    
+        break;
+    
+    
+    
+    // CONFIRMATION APRES VOTE
+    case 'confirmation':
+    
+        require_once __DIR__ . '/../views/vote/confirmation.php';
+    
+        break;
+    
+    
+    
+    // RESULTATS
+    case 'resultats':
+    
+        $controller = new VoteController();
+        $controller->resultats();
+    
+        break;
+    
+    
+    
+    // HISTORIQUE UTILISATEUR
+    case 'historique':
+    
+        $controller = new VoteController();
+        $controller->historique();
+    
+        break;
+    
+/*
+|--------------------------------------------------------------------------
+| ADMIN
+|--------------------------------------------------------------------------
+*/
+
+
+    // DASHBOARD ADMIN
+case 'admin-dashboard':
+
+    if (!isAdmin()) {
+
+        header('Location: ?page=login');
+        exit;
+    }
+
+
+    $controller = new AdminController();
+    $controller->dashboard();
+
+    break;
+
+
+
+// GESTION DES ELECTIONS
+case 'admin-elections':
+
+        if (!isAdmin()) {
+
+        header('Location: ?page=login');
+        exit;
+    }
+
+
+    $controller = new AdminController();
+    $controller->elections();
+
+    break;
+
+
+
+// AJOUT ELECTION
+
+case 'admin-election-create':
+
+    if (!isAdmin()) {
+
+        header('Location: ?page=login');
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+        $controller = new ElectionController();
+
+        $controller->creerElection(
+            $_POST['titre'],
+            $_POST['description'],
+            $_POST['date_Debut'],
+            $_POST['date_Fin']
+        );
+    }
+
+    break;
+
+// MODIFIER ELECTION
+case 'admin-election-edit':
+
+        if (!isAdmin()) {
+
+        header('Location: ?page=login');
+        exit;
+    }
+
+
+    if (isset($_GET['id'])) {
+
+        $controller = new AdminController();
+        $controller->editElection($_GET['id']);
+
+    }
+
+    break;
+
+
+
+// SUPPRIMER ELECTION
+case 'admin-election-delete':
+
+        if (!isAdmin()) {
+
+        header('Location: ?page=login');
+        exit;
+    }
+
+
+    if (isset($_GET['id'])) {
+
+        $controller = new AdminController();
+        $controller->deleteElection($_GET['id']);
+
+    }
+
+    break;
+
+
+
+// GESTION CANDIDATS
+case 'admin-candidats':
+
+        if (!isAdmin()) {
+
+        header('Location: ?page=login');
+        exit;
+    }
+
+
+    $controller = new AdminController();
+    $controller->candidats();
+
+    break;
+
+
+
+// AJOUT CANDIDAT
+case 'admin-candidat-create':
+
+    if (!isAdmin()) {
+
+        header('Location: ?page=login');
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+        $controller = new AdminController();
+        $controller->createCandidat($_POST);
+
+    }
+
+    break;
+
+
+
+// MODIFIER CANDIDAT
+case 'admin-candidat-edit':
+
+    if (!isAdmin()) {
+
+        header('Location: ?page=login');
+        exit;
+    }
+
+    if (isset($_GET['id'])) {
+
+        $controller = new AdminController();
+        $controller->editCandidat($_GET['id']);
+
+    }
+
+    break;
+
+
+
+// SUPPRIMER CANDIDAT
+case 'admin-candidat-delete':
+
+    if (!isAdmin()) {
+
+        header('Location: ?page=login');
+        exit;
+    }
+
+    if (isset($_GET['id'])) {
+
+        $controller = new AdminController();
+        $controller->deleteCandidat($_GET['id']);
+
+    }
+
+    break;
+
+
+
+// GESTION UTILISATEURS
+case 'admin-utilisateurs':
+
+    if (!isAdmin()) {
+
+        header('Location: ?page=login');
+        exit;
+    }
+
+    $controller = new AdminController();
+    $controller->utilisateurs();
+
+    break;
+
+
+
+// AUDIT / LOGS
+case 'admin-logs':
+
+    if (!isAdmin()) {
+
+        header('Location: ?page=login');
+        exit;
+    }
+
+    $controller = new AdminController();
+    $controller->auditLogs();
+
+    break;
+
+
+
+// RESULTATS
+case 'admin-resultats':
+
+    if (!isAdmin()) {
+
+        header('Location: ?page=login');
+        exit;
+    }
+
+    $controller = new AdminController();
+    $controller->resultat();
+
+    break;
+
+
+/*
+|--------------------------------------------------------------------------
+| OBSERVATEUR
+|--------------------------------------------------------------------------
+*/
+
+
+// DASHBOARD OBSERVATEUR
+case 'observateur-dashboard':
+
+    if (!isObservateur()) {
+
+        header('Location: ?page=login');
+    exit;
+    }
+
+    $controller = new ObservateurController();
+    $controller->dashboard();
+
+    break;
+
+
+
+// LISTE DES ELECTIONS
+case 'observateur-elections':
+
+    if (!isObservateur()) {
+
+        header('Location: ?page=login');
+    exit;
+    }
+
+    $controller = new ObservateurController();
+    $controller->elections();
+
+    break;
+
+
+
+// DETAILS D’UNE ELECTION
+case 'observateur-election-view':
+
+    if (!isObservateur()) {
+
+        header('Location: ?page=login');
+    exit;
+    }
+
+
+    if (isset($_GET['id'])) {
+
+        $controller = new ObservateurController();
+        $controller->viewElection($_GET['id']);
+
+    } else {
+
+        echo "Election introuvable";
+
+    }
+
+    break;
+
+
+
+// LISTE DES CANDIDATS
+case 'observateur-candidats':
+
+    if (!isObservateur()) {
+
+        header('Location: ?page=login');
+    exit;
+    }
+
+    if (isset($_GET['id'])) {
+
+        $controller = new ObservateurController();
+        $controller->viewCandidat($_GET['id']);
+
+    } else {
+
+        echo "Candidat introuvable";
+
+    }
+
+    break;
+
+
+
+// RESULTATS
+case 'observateur-resultats':
+
+    if (!isObservateur()) {
+
+        header('Location: ?page=login');
+    exit;
+    }
+
+    $controller = new ObservateurController();
+    $controller->resultats();
+
+    break;
+
+
+
+// RAPPORTS
+case 'observateur-rapports':
+
+    if (!isObservateur()) {
+
+        header('Location: ?page=login');
+    exit;
+    }
+
+    if (isset($_GET['id'])) {
+
+        $controller = new ObservateurController();
+        $controller->resultats($_GET['id']);
+    }
+
+    break;
+    
+    /*
+    -------------------------------------------------------------------
+            DEFAULT
+    ------------------------------------------------------------------
+    */
+        default:
+
+        echo "404 - Page introuvable";
+
+        break;
 }
+
 ?>

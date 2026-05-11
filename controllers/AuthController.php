@@ -26,9 +26,6 @@
 // ------------------------------------------------------------
 // Connexion base de données
 // ------------------------------------------------------------
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
 require_once __DIR__ . '/../config/db.php';
 
@@ -73,20 +70,94 @@ class AuthController
     // - stocke session temporaire
     // --------------------------------------------------------
 
-    public function login($email, $motDePasse)
+    // --------------------------------------------------------
+    // INSCRIPTION
+    // --------------------------------------------------------
+    public function register($data)
     {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
-        // ----------------------------------------------------
-        // Nettoyage données utilisateur
-        // ----------------------------------------------------
+            require_once __DIR__ . '/../views/auth/register.php';
+            return;
+        }
 
-        $email = trim(htmlspecialchars($email));
-        $motDePasse = trim($motDePasse);
+        $nom        = trim($data['nom']);
+        $email      = trim($data['email']);
+        $motDePasse = password_hash($data['password'], PASSWORD_DEFAULT);
+        $role       = $data['role'];
 
 
-        // ----------------------------------------------------
-        // Recherche utilisateur
-        // ----------------------------------------------------
+
+        // VERIFICATION EMAIL
+
+        $sqlCheck = "
+            SELECT *
+            FROM Utilisateur
+            WHERE email = :email
+            LIMIT 1
+        ";
+
+        $stmtCheck = $this->pdo->prepare($sqlCheck);
+
+        $stmtCheck->execute([
+
+            ':email' => $email
+        ]);
+
+        if ($stmtCheck->fetch()) {
+
+            $_SESSION['error'] = "Email déjà utilisé";
+
+            header('Location: ?page=register');
+            exit;
+        }
+
+
+
+        // INSERTION
+
+        $sql = "
+            INSERT INTO Utilisateur (
+                nom,
+                email,
+                motDePasseHash,
+                id_Role,
+                est_Actif
+            )
+            VALUES (
+                :nom,
+                :email,
+                :motDePasseHash,
+                :id_Role,
+                TRUE
+            )
+        ";
+
+        $stmt = $this->pdo->prepare($sql);
+
+        $stmt->execute([
+
+            ':nom'             => $nom,
+            ':email'           => $email,
+            ':motDePasseHash'  => $motDePasse,
+            ':id_Role'         => $role
+        ]);
+
+
+        $_SESSION['success'] = "Compte créé avec succès";
+
+        header('Location: ?page=login');
+        exit;
+    }
+    // --------------------------------------------------------
+    // LOGIN
+    // --------------------------------------------------------
+    public function login($data)
+    {
+        $email = trim(htmlspecialchars($data['email']));
+        $motDePasse = trim($data['password']);
+
+
 
         $sql = "
             SELECT *
@@ -98,77 +169,68 @@ class AuthController
         $stmt = $this->pdo->prepare($sql);
 
         $stmt->execute([
+
             ':email' => $email
         ]);
 
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 
-        // ----------------------------------------------------
-        // Vérification utilisateur
-        // ----------------------------------------------------
+
+        // UTILISATEUR
 
         if (!$user) {
 
-            return [
-                'status' => 'error',
-                'message' => 'Utilisateur introuvable'
-            ];
+            $_SESSION['error'] = "Utilisateur introuvable";
+
+            header('Location: ?page=login');
+            exit;
         }
 
 
-        // ----------------------------------------------------
-        // Vérification compte actif
-        // ----------------------------------------------------
 
-        if (!$user['estActif']) {
+        // ACTIF
 
-            return [
-                'status' => 'error',
-                'message' => 'Compte désactivé'
-            ];
+        if (!$user['est_Actif']) {
+
+            $_SESSION['error'] = "Compte désactivé";
+
+            header('Location: ?page=login');
+            exit;
         }
 
 
-        // ----------------------------------------------------
-        // Vérification mot de passe
-        // ----------------------------------------------------
+
+        // PASSWORD
 
         if (!password_verify($motDePasse, $user['motDePasseHash'])) {
 
-            return [
-                'status' => 'error',
-                'message' => 'Mot de passe incorrect'
-            ];
+            $_SESSION['error'] = "Mot de passe incorrect";
+
+            header('Location: ?page=login');
+            exit;
         }
 
 
-        // ----------------------------------------------------
-        // Sécurisation session
-        // ----------------------------------------------------
 
         session_regenerate_id(true);
 
 
-        // ----------------------------------------------------
-        // Génération OTP sécurisé
-        // ----------------------------------------------------
+
+        // OTP
 
         $otp = random_int(100000, 999999);
 
-        // Hash OTP avant stockage
         $otpHash = password_hash($otp, PASSWORD_DEFAULT);
 
-        // Expiration OTP : 5 minutes
         $expiration = date(
             'Y-m-d H:i:s',
             strtotime('+5 minutes')
         );
 
 
-        // ----------------------------------------------------
-        // Suppression anciens OTP
-        // ----------------------------------------------------
+
+        // DELETE OLD OTP
 
         $deleteOTP = "
             DELETE FROM OTP
@@ -178,13 +240,11 @@ class AuthController
         $stmtDelete = $this->pdo->prepare($deleteOTP);
 
         $stmtDelete->execute([
+
             ':id_Utilisateur' => $user['id_Utilisateur']
         ]);
 
-
-        // ----------------------------------------------------
-        // Insertion OTP sécurisé
-        // ----------------------------------------------------
+        // INSERT OTP
 
         $insertOTP = "
             INSERT INTO OTP (
@@ -209,43 +269,27 @@ class AuthController
 
             ':id_Utilisateur' => $user['id_Utilisateur'],
             ':code_Hash'      => $otpHash,
-            ':expiration'    => $expiration
+            ':expiration'     => $expiration
         ]);
-
-
-        // ----------------------------------------------------
-        // Session temporaire avant validation OTP
-        // ----------------------------------------------------
 
         $_SESSION['temp_user'] = [
 
             'id_Utilisateur' => $user['id_Utilisateur'],
-            'email'         => $user['email'],
+            'email'          => $user['email'],
             'id_Role'        => $user['id_Role']
         ];
 
 
-        // ----------------------------------------------------
-        // Retour succès
-        // ----------------------------------------------------
-        // IMPORTANT :
-        // En réel :
-        // - envoyer OTP par SMS
-        // - ou email
-        //
-        // Ici :
-        // - affiché pour développement
-        // ----------------------------------------------------
 
-        return [
+        // DEV OTP
 
-            'status' => 'success',
-            'message' => 'OTP généré',
-            'otp_dev' => $otp
-        ];
+        $_SESSION['otp_dev'] = $otp;
+
+
+
+        header('Location: ?page=otp');
+        exit;
     }
-
-
 
     // --------------------------------------------------------
     // VERIFICATION OTP
@@ -265,18 +309,19 @@ class AuthController
         // ----------------------------------------------------
 
         if (!isset($_SESSION['temp_user'])) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Session expirée'
-            ];
+            
+            $_SESSION['error'] = "Session expirée";
+            
+            header('Location: ?page=login');
+            exit;
         }
 
 
         // ----------------------------------------------------
         // Récupération utilisateur temporaire
         // ----------------------------------------------------
+        
+        $otpSaisi = trim($data['otp']);
 
         $tempUser = $_SESSION['temp_user'];
 
@@ -308,12 +353,11 @@ class AuthController
         // ----------------------------------------------------
 
         if (!$otpData) {
+        
+            $_SESSION['error'] = "OTP introuvable";
 
-            return [
-
-                'status' => 'error',
-                'message' => 'OTP introuvable'
-            ];
+             header('Location: ?page=otp');
+            exit;
         }
 
 
@@ -321,13 +365,13 @@ class AuthController
         // Vérification expiration
         // ----------------------------------------------------
 
+ 
         if (strtotime($otpData['expiration']) < time()) {
 
-            return [
+            $_SESSION['error'] = "OTP expiré";
 
-                'status' => 'error',
-                'message' => 'OTP expiré'
-            ];
+            header('Location: ?page=otp');
+            exit;
         }
 
 
@@ -337,16 +381,15 @@ class AuthController
 
         if (!password_verify($otpSaisi, $otpData['code_Hash'])) {
 
-            return [
-
-                'status' => 'error',
-                'message' => 'OTP invalide'
-            ];
+            $_SESSION['error'] = "OTP invalide";
+            
+            header('Location: ?page=otp');
+            exit;
         }
 
 
         // ----------------------------------------------------
-        // Marquer OTP comme utilisé
+        // Marquer OTP comme utilisé ou mise a jour
         // ----------------------------------------------------
 
         $updateOTP = "
@@ -389,34 +432,24 @@ class AuthController
         $redirect = 'login.php';
 
 
-        switch ($_SESSION['user']['id_Role']) {
+      switch ($_SESSION['user']['id_Role']) {
 
             case 1:
 
-                $redirect = 'admin-dashboard.php';
-                break;
+                header('Location: ?page=admin-dashboard');
+            exit;
 
             case 2:
 
-                $redirect = 'observateur-dashboard.php';
-                break;
+                header('Location: ?page=observateur-dashboard');
+            exit;
 
             default:
 
-                $redirect = 'accueil.php';
+                header('Location: ?page=accueil');
+            exit;
         }
 
-
-        // ----------------------------------------------------
-        // Retour succès
-        // ----------------------------------------------------
-
-        return [
-
-            'status' => 'success',
-            'message' => 'Connexion validée',
-            'redirect' => $redirect
-        ];
     }
 
 
@@ -444,16 +477,8 @@ class AuthController
         session_destroy();
 
 
-        // ----------------------------------------------------
-        // Retour succès
-        // ----------------------------------------------------
-
-        return [
-
-            'status' => 'success',
-            'message' => 'Déconnexion réussie',
-            'redirect' => 'login.php'
-        ];
+        header('Location: ?page=login');
+        exit;
     }
 }
 ?>

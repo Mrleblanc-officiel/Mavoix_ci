@@ -46,4 +46,19 @@ class Utilisateur
 
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
+
+        public function listerTous()
+    {
+        global $pdo;
+    
+        $sql = "
+            SELECT *
+            FROM Utilisateur
+            ORDER BY id_Utilisateur DESC
+        ";
+    
+        $stmt = $pdo->query($sql);
+    
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 }

@@ -21,9 +21,6 @@
 // Connexion base de données
 // ------------------------------------------------------------
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start(); 
-    }
 require_once __DIR__ . '/../config/db.php';
 
 // ------------------------------------------------------------
@@ -94,11 +91,9 @@ class CandidatController
 
         if (!$this->verifierAdmin()) {
 
-            return [
-
-                'status' => 'error',
-                'message' => 'Accès refusé'
-            ];
+            $_SESSION['error'] = 'Accès refusé';
+            header('Location: ?page=login');
+            exit;
         }
 
 
@@ -120,12 +115,9 @@ class CandidatController
             || empty($prenom)
             || empty($id_Election)
         ) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Champs obligatoires manquants'
-            ];
+            $_SESSION[error] = 'veuillez remplir tous les champs';
+            header('Location: ?page=admin');
+            exit;
         }
 
 
@@ -152,11 +144,9 @@ class CandidatController
 
         if (!$election) {
 
-            return [
-
-                'status' => 'error',
-                'message' => 'Election introuvable'
-            ];
+            $_SESSION['error'] = 'Erreur Election introuvable';
+            header('Location: ?page=admin');
+            exit;
         }
 
 
@@ -184,12 +174,9 @@ class CandidatController
 
 
             if (!$parti) {
-
-                return [
-
-                    'status' => 'error',
-                    'message' => 'Parti politique introuvable'
-                ];
+                $_SESSION['error'] = 'Erreur Parti Politique introuvable';
+                header('Location: ?page=admin');
+                exit;
             }
         }
 
@@ -265,20 +252,14 @@ class CandidatController
                 ':id_Candidat' => $id_Candidat
             ]);
 
-
-            return [
-
-                'status' => 'success',
-                'message' => 'Candidat ajouté avec succès'
-            ];
+            $_SESSION['succes'] = 'Sucess candidat ajouter'; 
+            header('Location: ?page=admin');
+            exit;
 
         } catch (PDOException $e) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Erreur SQL : ' . $e->getMessage()
-            ];
+            $_SESSION['error'] = 'Erreur SQL : ' . $e->getMessage();
+            header('Location: ?page=admin');
+            exit;
         }
     }
 
@@ -310,12 +291,9 @@ class CandidatController
         // ----------------------------------------------------
 
         if (!$this->verifierAdmin()) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Accès refusé'
-            ];
+            $_SESSION['error'] = 'Accès refusé';
+            header('Location: ?page=login');
+            exit;
         }
 
 
@@ -341,12 +319,9 @@ class CandidatController
 
 
         if (!$candidat) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Candidat introuvable'
-            ];
+            $_SESSION['error'] = 'Candidat introuvable';
+            header('Location: ?page=admin');
+            exit;
         }
 
 
@@ -387,12 +362,9 @@ class CandidatController
             ];
 
         } catch (PDOException $e) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Erreur SQL : ' . $e->getMessage()
-            ];
+            $_SESSION['error'] = 'Erreur SQL : ' . $e->getMessage();
+            header('Location: ?page=admin');
+            exit;
         }
     }
 
@@ -412,12 +384,9 @@ class CandidatController
         // ----------------------------------------------------
 
         if (!$this->verifierAdmin()) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Accès refusé'
-            ];
+            $_SESSION['error'] = 'Accès refusé';
+            header('Location: ?page=login');
+            exit;
         }
 
 
@@ -443,12 +412,9 @@ class CandidatController
 
 
         if (!$candidat) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Candidat introuvable'
-            ];
+            $_SESSION['error'] = 'Candidat introuvable';
+            header('Location: ?page=admin');
+            exit;
         }
 
 
@@ -457,12 +423,9 @@ class CandidatController
         // ----------------------------------------------------
 
         if (!$candidat['id_Actif']) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Candidat déjà désactivé'
-            ];
+            $_SESSION['error'] = 'Candidat déjà désactivé';
+            header('Location: ?page=admin');
+            exit;
         }
 
 
@@ -484,21 +447,14 @@ class CandidatController
 
                 ':id_Candidat' => $id_Candidat
             ]);
-
-
-            return [
-
-                'status' => 'success',
-                'message' => 'Candidat désactivé avec succès'
-            ];
+            $_SESSION['success'] = 'Candidat désactivé';
+            header('Location: ?page=admin');
+            exit;
 
         } catch (PDOException $e) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Erreur SQL : ' . $e->getMessage()
-            ];
+            $_SESSION['error'] = 'Erreur SQL : ' . $e->getMessage();
+            header('Location: ?page=admin');
+            exit;
         }
     }
 
@@ -547,6 +503,9 @@ class CandidatController
 
             $candidats = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+            $_SESSION['candidats'] = $candidats;
+            header('Location: ?page=admin');
+            exit;
 
             return [
 
@@ -555,12 +514,9 @@ class CandidatController
             ];
 
         } catch (PDOException $e) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Erreur SQL : ' . $e->getMessage()
-            ];
+            $_SESSION['error'] = 'Erreur SQL : ' . $e->getMessage();
+            header('Location: ?page=admin');
+            exit;
         }
     }
 }

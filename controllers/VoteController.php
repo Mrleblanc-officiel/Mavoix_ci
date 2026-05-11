@@ -18,10 +18,6 @@
 // Démarrage session
 // ------------------------------------------------------------
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start(); 
-    }
-
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../models/Vote.php';
 require_once __DIR__ . '/../models/Electeur.php';
@@ -60,6 +56,75 @@ class VoteController
         $this->pdo = $pdo;
     }
 
+    // --------------------------------------------------------
+    // DASHBOARD ELECTEUR
+    // --------------------------------------------------------
+    public function dashboard()
+    {
+        $verification = $this->verifierElecteur();
+
+        if ($verification['status'] == 'error') {
+
+            header('Location: ?page=login');
+            exit;
+        }
+
+        $electionModel = new Election();
+
+        $elections = $electionModel->listerToutes();
+
+        require_once __DIR__ . '/../views/vote/dashboard.php';
+    }
+
+
+    // --------------------------------------------------------
+    // LISTE DES ELECTIONS
+    // --------------------------------------------------------
+    public function elections()
+    {
+        $verification = $this->verifierElecteur();
+
+        if ($verification['status'] == 'error') {
+
+            header('Location: ?page=login');
+            exit;
+        }
+
+        $electionModel = new Election();
+
+        $elections = $electionModel->listerToutes();
+
+        require_once __DIR__ . '/../views/vote/elections.php';
+    }
+
+    // --------------------------------------------------------
+    // BULLETIN DE VOTE
+    // --------------------------------------------------------
+    public function bulletin($id_Election)
+    {
+        $verification = $this->verifierElecteur();
+
+        if ($verification['status'] == 'error') {
+
+            header('Location: ?page=login');
+            exit;
+        }
+
+        $electionModel = new Election();
+        $candidatModel = new Candidat();
+
+        $election = $electionModel->findById($id_Election);
+
+        if (!$election) {
+
+            echo "Election introuvable";
+            exit;
+        }
+
+        $candidats = $candidatModel->listerParElection($id_Election);
+
+        require_once __DIR__ . '/../views/vote/bulletin.php';
+    }
 
 
     // --------------------------------------------------------
@@ -81,11 +146,7 @@ class VoteController
 
         if (!isset($_SESSION['user'])) {
 
-            return [
-
-                'status' => 'error',
-                'message' => 'Utilisateur non connecté'
-            ];
+        require_once __DIR__ . './../views/vote/dashboard.php';
         }
 
 
@@ -103,6 +164,7 @@ class VoteController
                 'message' => 'Accès réservé aux électeurs'
             ];
         }
+
 
 
         // ----------------------------------------------------
@@ -245,46 +307,54 @@ class VoteController
     // - enregistre vote
     // --------------------------------------------------------
 
-    public function voter($id_Candidat)
+    // --------------------------------------------------------
+    // ENREGISTRER VOTE
+    // --------------------------------------------------------
+    public function voter($data)
     {
 
         // ----------------------------------------------------
         // Vérification électeur
         // ----------------------------------------------------
-
+        
         $verification = $this->verifierElecteur();
 
         if ($verification['status'] == 'error') {
 
-            return $verification;
+            $_SESSION['error'] = $verification['message'];
+
+            header('Location: ?page=login');
+            exit;
         }
 
+        if (!isset($data['id_Candidat'])) {
 
-        // ----------------------------------------------------
-        // Données électeur
-        // ----------------------------------------------------
+            $_SESSION['error'] = "Candidat invalide";
+
+            header('Location: ?page=elections');
+            exit;
+        }
+
+        $id_Candidat = $data['id_Candidat'];
 
         $electeur = $verification['data'];
 
         $id_Electeur = $electeur['id_Electeur'];
 
-
         // ----------------------------------------------------
-        // Vérification double vote
+        // DOUBLE VOTE
         // ----------------------------------------------------
 
         if ($this->verifierDoubleVote($id_Electeur)) {
 
-            return [
+            $_SESSION['error'] = "Vous avez déjà voté";
 
-                'status' => 'error',
-                'message' => 'Vous avez déjà voté'
-            ];
+            header('Location: ?page=elections');
+            exit;
         }
 
-
         // ----------------------------------------------------
-        // Vérification candidat
+        // VERIFICATION CANDIDAT
         // ----------------------------------------------------
 
         $sqlCandidat = "
@@ -311,47 +381,33 @@ class VoteController
 
         $candidat = $stmtCandidat->fetch(PDO::FETCH_ASSOC);
 
-
-        // ----------------------------------------------------
-        // Vérification existence candidat
-        // ----------------------------------------------------
-
         if (!$candidat) {
 
-            return [
+            $_SESSION['error'] = "Candidat introuvable";
 
-                'status' => 'error',
-                'message' => 'Candidat introuvable'
-            ];
+            header('Location: ?page=elections');
+            exit;
         }
-
-
-        // ----------------------------------------------------
-        // Vérification élection active
-        // ----------------------------------------------------
-
         if ($candidat['statut'] != 'EN_COURS') {
 
-            return [
+            $_SESSION['error'] = "Election non active";
 
-                'status' => 'error',
-                'message' => 'Election non active'
-            ];
+            header('Location: ?page=elections');
+            exit;
         }
 
 
+
         // ----------------------------------------------------
-        // Génération token vote
+        // TOKEN
         // ----------------------------------------------------
 
         $tokenVote = $this->genererTokenVote();
 
 
+
         // ----------------------------------------------------
-        // Transaction SQL
-        // ----------------------------------------------------
-        // IMPORTANT :
-        // Empêche incohérences si erreur
+        // TRANSACTION
         // ----------------------------------------------------
 
         try {
@@ -359,9 +415,8 @@ class VoteController
             $this->pdo->beginTransaction();
 
 
-            // ------------------------------------------------
-            // Insertion vote
-            // ------------------------------------------------
+
+            // INSERT VOTE
 
             $sqlVote = "
                 INSERT INTO Vote (
@@ -388,9 +443,8 @@ class VoteController
             ]);
 
 
-            // ------------------------------------------------
-            // Mise à jour électeur
-            // ------------------------------------------------
+
+            // UPDATE ELECTEUR
 
             $sqlUpdateElecteur = "
                 UPDATE Electeur
@@ -408,46 +462,49 @@ class VoteController
             ]);
 
 
-            // ------------------------------------------------
-            // Validation transaction
-            // ------------------------------------------------
+
+            // COMMIT
 
             $this->pdo->commit();
 
 
-            // ------------------------------------------------
-            // Retour succès
-            // ------------------------------------------------
 
-            return [
+            $_SESSION['success'] = "Vote enregistré avec succès";
 
-                'status' => 'success',
-                'message' => 'Vote enregistré avec succès',
-
-                // Token utile pour :
-                // - audit
-                // - vérification
-                // - traçabilité
-
-                'tokenVote' => $tokenVote
-            ];
-
-        } catch (PDOException $e) {
+            $_SESSION['tokenVote'] = $tokenVote;
 
 
-            // ------------------------------------------------
-            // Annulation transaction
-            // ------------------------------------------------
+
+            header('Location: ?page=confirmation');
+            exit;
+
+        } 
+        
+        catch (PDOException $e) {
 
             $this->pdo->rollBack();
 
+            $_SESSION['error'] = "Erreur SQL";
 
-            return [
-
-                'status' => 'error',
-                'message' => 'Erreur SQL : ' . $e->getMessage()
-            ];
+            header('Location: ?page=elections');
+            exit;
         }
+    }
+
+    // --------------------------------------------------------
+    // CONFIRMATION VOTE
+    // --------------------------------------------------------
+    public function confirmation()
+    {
+        $verification = $this->verifierElecteur();
+        
+        if ($verification['status'] == 'error') {
+        
+            header('Location: ?page=login');
+            exit;
+        }
+        
+        require_once __DIR__ . '/../views/vote/confirmation.php';
     }
 }
 ?>

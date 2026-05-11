@@ -14,9 +14,7 @@
 |------------------------------------------------------------
 */
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../models/Election.php';
 require_once __DIR__ . '/../models/Candidat.php';
@@ -55,56 +53,114 @@ class ObservateurController
     public function elections()
     {
         if (!$this->verifierObservateur()) {
-            return ['status' => 'error', 'message' => 'Accès refusé'];
+            header('Location: ?page=login');
+        exit;
         }
 
         $elections = $this->electionModel->listerToutes();
 
-        return ['status' => 'success', 'data' => $elections];
+        require_once __DIR__ . '/../views/observateur/election.php';
     }
 
-    // --------------------------------------------------------
-    // CANDIDATS D'UNE ELECTION
-    // --------------------------------------------------------
-    public function candidats($id_Election)
-    {
-        if (!$this->verifierObservateur()) {
-            return ['status' => 'error', 'message' => 'Accès refusé'];
-        }
+// --------------------------------------------------------
+// CANDIDATS D'UNE ELECTION
+// --------------------------------------------------------
+public function candidats($id_Election)
+{
+    if (!$this->verifierObservateur()) {
 
-        $election = $this->electionModel->findById($id_Election);
-        if (!$election) {
-            return ['status' => 'error', 'message' => 'Election introuvable'];
-        }
-
-        $candidats = $this->candidatModel->listerParElection($id_Election);
-
-        return ['status' => 'success', 'election' => $election, 'data' => $candidats];
+        header('Location: ?page=login');
+        exit;
     }
 
-    // --------------------------------------------------------
-    // RESULTATS EN TEMPS REEL
-    // --------------------------------------------------------
-    public function resultats($id_Election)
-    {
-        if (!$this->verifierObservateur()) {
-            return ['status' => 'error', 'message' => 'Accès refusé'];
-        }
+    $election = $this->electionModel->findById($id_Election);
 
-        $election = $this->electionModel->findById($id_Election);
-        if (!$election) {
-            return ['status' => 'error', 'message' => 'Election introuvable'];
-        }
+    if (!$election) {
 
-        $resultats  = $this->voteModel->resultatsParElection($id_Election);
-        $totalVotes = $this->voteModel->totalParElection($id_Election);
-
-        return [
-            'status'      => 'success',
-            'election'    => $election,
-            'resultats'   => $resultats,
-            'total_votes' => $totalVotes
-        ];
+        echo "Election introuvable";
+        exit;
     }
+
+    $candidats = $this->candidatModel->listerParElection($id_Election);
+
+    require_once __DIR__ . '/../views/observateur/candidats.php';
+}
+
+// --------------------------------------------------------
+// RESULTATS EN TEMPS REEL
+// --------------------------------------------------------
+public function resultats($id_Election)
+{
+    if (!$this->verifierObservateur()) {
+
+        header('Location: ?page=login');
+        exit;
+    }
+
+    $election = $this->electionModel->findById($id_Election);
+
+    if (!$election) {
+
+        echo "Election introuvable";
+        exit;
+    }
+
+    $resultats  = $this->voteModel->resultatsParElection($id_Election);
+
+    $totalVotes = $this->voteModel->totalParElection($id_Election);
+
+    require_once __DIR__ . '/../views/observateur/resultats.php';
+}
+
+// --------------------------------------------------------
+// DASHBOARD OBSERVATEUR
+// --------------------------------------------------------
+public function dashboard()
+{
+    if (!$this->verifierObservateur()) {
+        header('Location: ?page=login');
+        exit;
+    }
+
+    $elections = $this->electionModel->listerToutes();
+
+    require_once __DIR__ . '/../views/observateur/dashboard.php';
+}
+
+
+
+// --------------------------------------------------------
+// DETAILS D'UNE ELECTION
+// --------------------------------------------------------
+public function viewElection($id_Election)
+{
+    if (!$this->verifierObservateur()) {
+        return ['status' => 'error', 'message' => 'Accès refusé'];
+    }
+
+    $election = $this->electionModel->findById($id_Election);
+
+    if (!$election) {
+        return ['status' => 'error', 'message' => 'Election introuvable'];
+    }
+
+    require_once __DIR__ . '/../views/observateur/election-details.php';
+}
+
+
+
+// --------------------------------------------------------
+// RAPPORTS / STATISTIQUES
+// --------------------------------------------------------
+public function rapports()
+{
+    if (!$this->verifierObservateur()) {
+        return ['status' => 'error', 'message' => 'Accès refusé'];
+    }
+
+    $elections = $this->electionModel->listerToutes();
+
+    require_once __DIR__ . '/../views/observateur/rapports.php';
+}
 }
 ?>

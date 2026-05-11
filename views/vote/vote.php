@@ -1,0 +1,1 @@
+echo "hello this is vote page";

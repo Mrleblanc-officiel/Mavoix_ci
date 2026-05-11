@@ -21,9 +21,6 @@
 // Connexion base de données
 // ------------------------------------------------------------
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start(); 
-    }
 require_once __DIR__ . '/../config/db.php';
 
 // ------------------------------------------------------------
@@ -51,6 +48,7 @@ class ElectionController
         $this->pdo = $pdo;
     }
 
+    
 
     // --------------------------------------------------------
     // Vérification ADMIN
@@ -94,12 +92,7 @@ class ElectionController
         // ----------------------------------------------------
 
         if (!$this->verifierAdmin()) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Accès refusé'
-            ];
+            header('Location: ?page=login');
         }
 
 
@@ -110,7 +103,6 @@ class ElectionController
         $titre = trim(htmlspecialchars($titre));
         $description = trim(htmlspecialchars($description));
 
-
         // ----------------------------------------------------
         // Vérification champs vides
         // ----------------------------------------------------
@@ -119,13 +111,12 @@ class ElectionController
             empty($titre)
             || empty($date_Debut)
             || empty($date_Fin)
-        ) {
+        ) 
+        {
+            $_SESSION['error'] = "Tous les champs sont  obligatoires";
 
-            return [
-
-                'status' => 'error',
-                'message' => 'Tous les champs sont obligatoires'
-            ];
+            header('Location: ?page=admin-election-create');
+            exit;
         }
 
 
@@ -135,11 +126,11 @@ class ElectionController
 
         if (strtotime($date_Fin) <= strtotime($date_Debut)) {
 
-            return [
+            $_SESSION['error'] = "Dates invalides";
 
-                'status' => 'error',
-                'message' => 'La date de fin doit être supérieure à la date de début'
-            ];
+            header('Location: ?page=admin-election-create');
+            exit;
+    
         }
 
 
@@ -175,25 +166,14 @@ class ElectionController
                 ':date_Debut'   => $date_Debut,
                 ':date_Fin'     => $date_Fin
             ]);
+            $_SESSION['success'] = "L'élection a été créée avec succès";
 
-
-            // ------------------------------------------------
-            // Retour succès
-            // ------------------------------------------------
-
-            return [
-
-                'status' => 'success',
-                'message' => 'Election créée avec succès'
-            ];
+            header('Location: ?page=admin-elections');
 
         } catch (PDOException $e) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Erreur SQL : ' . $e->getMessage()
-            ];
+             $_SESSION['error'] = "Erreur SQL";
+             header('Location: ?page=admin-election-create');
+             exit;
         }
     }
 
@@ -222,12 +202,8 @@ class ElectionController
         // ----------------------------------------------------
 
         if (!$this->verifierAdmin()) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Accès refusé'
-            ];
+            header('Location: ?page=login');
+            exit;
         }
 
 
@@ -253,12 +229,10 @@ class ElectionController
 
 
         if (!$election) {
+            $_SESSION['error'] = "Election introuvable";
 
-            return [
-
-                'status' => 'error',
-                'message' => 'Election introuvable'
-            ];
+            header('Location: ?page=admin-elections');
+            exit;
         }
 
 
@@ -267,12 +241,10 @@ class ElectionController
         // ----------------------------------------------------
 
         if (strtotime($date_Fin) <= strtotime($date_Debut)) {
+            $_SESSION['error'] = "Dates invalides";
 
-            return [
-
-                'status' => 'error',
-                'message' => 'Dates invalides'
-            ];
+            header('Location: ?page=admin-election-edit&id=' . $id_Election);
+            exit;
         }
 
 
@@ -302,21 +274,15 @@ class ElectionController
                 ':date_Fin'     => $date_Fin,
                 ':id_Election'  => $id_Election
             ]);
-
-
-            return [
-
-                'status' => 'success',
-                'message' => 'Election modifiée avec succès'
-            ];
+            
+            $_SESSION['success'] = "L'élection a été modifiée avec succès";
+            header('Location: ?page=admin-elections');
+            exit;
 
         } catch (PDOException $e) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Erreur SQL : ' . $e->getMessage()
-            ];
+            $_SESSION['error'] = "Erreur SQL";
+            header('Location: ?page=admin-election-edit&id=' . $id_Election);
+            exit;
         }
     }
 
@@ -337,12 +303,8 @@ class ElectionController
         // ----------------------------------------------------
 
         if (!$this->verifierAdmin()) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Accès refusé'
-            ];
+            header('Location: ?page=login');
+            exit;
         }
 
 
@@ -369,11 +331,10 @@ class ElectionController
 
         if (!$election) {
 
-            return [
+            $_SESSION['error'] = "Election introuvable";
+            header('Location: ?page=admin-elections');
+            exit;
 
-                'status' => 'error',
-                'message' => 'Election introuvable'
-            ];
         }
 
 
@@ -383,11 +344,10 @@ class ElectionController
 
         if ($election['statut'] == 'TERMINER') {
 
-            return [
+        $_SESSION['error'] = "L'élection est déjà terminée";
+        header('Location: ?page=admin-elections');
+        exit;
 
-                'status' => 'error',
-                'message' => 'Election déjà clôturée'
-            ];
         }
 
 
@@ -409,62 +369,66 @@ class ElectionController
 
                 ':id_Election' => $id_Election
             ]);
+            $_SESSION['success'] = "L'élection a été clôturée avec succès";
+            header('Location: ?page=admin-elections');
+            exit;
+        } catch (PDOException $e) {
+                $_SESSION['error'] = "Erreur SQL"; 
+            }
+            
+            header('Location: ?page=admin-elections');
+            exit;
+    
+    }
 
+        public function deleteElection($id_Election)
+    {
+        if (!$this->verifierAdmin()) {
 
-            return [
+            header('Location: ?page=login');
+            exit;
+        }
 
-                'status' => 'success',
-                'message' => 'Election clôturée avec succès'
-            ];
+        try {
+
+            $sql = "
+                DELETE FROM Election
+                WHERE id_Election = :id_Election
+            ";
+
+            $stmt = $this->pdo->prepare($sql);
+
+            $stmt->execute([
+
+                ':id_Election' => $id_Election
+            ]);
+
+            $_SESSION['success'] = "Election supprimée";
 
         } catch (PDOException $e) {
 
-            return [
-
-                'status' => 'error',
-                'message' => 'Erreur SQL : ' . $e->getMessage()
-            ];
+            $_SESSION['error'] = "Erreur SQL";
         }
+
+        header('Location: ?page=admin-elections');
+        exit;
     }
-
-
 
     // --------------------------------------------------------
     // RECUPERER TOUTES LES ELECTIONS
     // --------------------------------------------------------
     // Retourne la liste complète
     // --------------------------------------------------------
-
     public function recupererElections()
     {
-
-        try {
-
-            $sql = "
-                SELECT *
-                FROM Election
-                ORDER BY dateCreation DESC
-            ";
-
-            $stmt = $this->pdo->query($sql);
-
-            $elections = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-
-            return [
-
-                'status' => 'success',
-                'data' => $elections
-            ];
-
-        } catch (PDOException $e) {
-
-            return [
-
-                'status' => 'error',
-                'message' => 'Erreur SQL : ' . $e->getMessage()
-            ];
-        }
+        $sql = "
+            SELECT *
+            FROM Election
+            ORDER BY dateCreation DESC
+        ";
+        
+        $stmt = $this->pdo->query($sql);
+        
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
-?>
