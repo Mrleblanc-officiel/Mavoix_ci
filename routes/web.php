@@ -67,13 +67,13 @@ switch ($page) {
 
     case 'vote-submit':
 
-    if (!isAdmin()) {
-        header('Location: ?page=vote-submit');
-        exit;
-    }
-
-    require_once __DIR__ . '/../views/vote/vote-submit.php';
-
+        if (!isAdmin()) {
+            header('Location: ?page=vote-submit');
+            exit;
+        }
+        
+        require_once __DIR__ . '/../views/vote/vote-submit.php';
+    
     break;
 
     /*
@@ -113,7 +113,7 @@ switch ($page) {
 
         }
 
-        break;
+    break;
 
 
     // VERIFICATION OTP
@@ -130,7 +130,7 @@ switch ($page) {
 
         }
 
-        break;
+    break;
 
 
     // DECONNEXION
@@ -139,7 +139,7 @@ switch ($page) {
         $controller = new AuthController();
         $controller->logout();
 
-        break;
+    break;
 
     /*
     |--------------------------------------------------------------------------
@@ -153,7 +153,7 @@ switch ($page) {
     
         require_once __DIR__ . '/../views/vote/accueil.php';
     
-        break;
+    break;
     
     
     
@@ -174,16 +174,15 @@ switch ($page) {
     
             $controller = new VoteController();
             $controller->bulletin($_GET['id']);
-    
-        } else {
+
+        header('Location: ?page=confirmation');
+        exit;
+        } 
+        else {
     
             echo "Election introuvable";
     
         }
-
-        header('Location: ?page=confirmation');
-exit;
-    
         break;
     
     
@@ -460,7 +459,7 @@ case 'admin-resultats':
     }
 
     $controller = new AdminController();
-    $controller->resultat();
+    $controller->resultats();
 
     break;
 

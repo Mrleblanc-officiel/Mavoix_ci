@@ -182,11 +182,14 @@ class AdminController
     public function auditLogs($limite = 50)
     {
         if (!$this->verifierAdmin()) {
-            return ['status' => 'error', 'message' => 'Accès refusé'];
+            $_SESSION['error'] = "error: access refuser";
+            header('Location: ?page=admin-logs');
+            exit;
         }
 
         $audit = new AuditLog();
-        return ['status' => 'success', 'data' => $audit->listerRecents($limite)];
+        $_SESSION['sucess'] = "sucess", listerRecents($limite);
+        require_once __DIR__ . '/../views/admin/audi.php';
     }
 
     // --------------------------------------------------------
